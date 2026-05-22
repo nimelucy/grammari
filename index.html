@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SEO Grammar Judge - Batch Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .loader {
+            border: 3px solid #f3f3f3; border-top: 3px solid #3b82f6; border-radius: 50%;
+            width: 18px; height: 18px; animation: spin 1s linear infinite; display: inline-block;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gray-50 p-6 font-sans">
+
+    <div class="max-w-5xl mx-auto bg-white p-6 rounded-lg shadow-md border-t-4 border-blue-600">
+        <h1 class="text-2xl font-bold text-gray-800 mb-2">SEO Grammar Judge (Batch Edition)</h1>
+        <p class="text-sm text-gray-600 mb-6">Mampu memproses hingga 30.000 baris menggunakan sistem antrean bertahap.</p>
+
+        <div class="mb-4 flex gap-4">
+            <input type="password" id="apiKey" class="flex-1 p-2 border border-gray-300 rounded focus:ring-blue-500 text-sm" placeholder="Paste API Key di sini">
+            <input type="text" id="aiModel" class="w-1/4 p-2 border border-gray-300 rounded text-sm" value="glm-5.1" placeholder="Model">
+            <input type="number" id="batchSize" class="w-1/4 p-2 border border-gray-300 rounded text-sm" value="100" placeholder="Batch Size (Max 150)">
+        </div>
+
+        <textarea id="dataInput" rows="6" class="w-full p-3 mb-4 border border-gray-300 rounded focus:ring-blue-500 font-mono text-sm" placeholder="Paste PULUHAN RIBU list keyword Anda di sini... (Tanpa angka Volume/CPC)"></textarea>
+
+        <button onclick="startBatchProcessing()" id="processBtn" class="w-full bg-blue-600 text-white px-5 py-3 rounded hover:bg-blue-700 transition font-bold text-center">
+            Mulai Ekstraksi AI (Batch Processing)
+        </button>
+
+        <div id="progressContainer" class="hidden mt-4 bg-gray-100 p-4 rounded-lg">
+            <div class="flex justify-between text-sm font-bold text-gray-700 mb-1">
+                <span id="progressText">Memproses Batch 0 / 0</span>
+                <span id="progressPercent">0%</span>
+            </div>
+            <div class="w-full bg-gray-300 rounded-full h-2.5 mb-2">
+                <div id="progressBar" class="bg-blue-600 h-2.5 rounded-full" style="width: 0%"></div>
+            </div>
+            <p id="statusLog" class="text-xs text-gray-500 h-16 overflow-y-auto font-mono"></p>
+        </div>
+
+        <div id="resultContainer" class="mt-8 hidden space-y-6">
+            
+            <div class="border rounded-lg overflow-hidden border-red-200">
+                <div class="bg-red-50 p-3 border-b border-red-200 flex justify-between items-center">
+                    <h2 class="font-bold text-red-800">❌ Kesalahan Grammar / Merek</h2>
+                    <div class="flex gap-2">
+                        <button onclick="copyErrors()" id="copyErrorsBtn" class="text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700">Copy Table</button>
+                        <span id="countError" class="bg-red-600 text-white text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-60 overflow-y-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-red-100 text-red-900 sticky top-0">
+                            <tr><th class="p-2 w-1/3">Asli</th><th class="p-2 w-1/3">Koreksi</th><th class="p-2 w-1/3">Alasan</th></tr>
+                        </thead>
+                        <tbody id="tableErrors" class="divide-y divide-gray-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="border rounded-lg overflow-hidden border-yellow-200">
+                <div class="bg-yellow-50 p-3 border-b border-yellow-200 flex justify-between items-center">
+                    <h2 class="font-bold text-yellow-800">⚠️ Kurang Tepat (Casual)</h2>
+                    <div class="flex gap-2">
+                        <button onclick="copyWarnings()" id="copyWarningsBtn" class="text-xs bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">Copy Table</button>
+                        <span id="countWarning" class="bg-yellow-500 text-white text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                </div>
+                <div class="overflow-x-auto max-h-60 overflow-y-auto">
+                    <table class="w-full text-sm text-left">
+                        <thead class="bg-yellow-100 text-yellow-900 sticky top-0">
+                            <tr><th class="p-2 w-1/3">Asli</th><th class="p-2 w-1/3">Koreksi</th><th class="p-2 w-1/3">Alasan</th></tr>
+                        </thead>
+                        <tbody id="tableWarnings" class="divide-y divide-gray-100 bg-white"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="border rounded-lg overflow-hidden border-green-200">
+                <div class="bg-green-50 p-3 border-b border-green-200 flex justify-between items-center">
+                    <h2 class="font-bold text-green-800">✅ Sempurna (SEO Ready)</h2>
+                    <div class="flex gap-2">
+                        <button onclick="copyPerfect()" id="copyPerfectBtn" class="text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700">Copy List</button>
+                        <span id="countPerfect" class="bg-green-600 text-white text-xs px-2 py-1 rounded-full">0</span>
+                    </div>
+                </div>
+                <div class="p-4 bg-white max-h-60 overflow-y-auto">
+                    <ul id="listPerfect" class="list-disc pl-5 text-sm text-gray-700 space-y-1 font-mono"></ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <textarea id="aiSystemPrompt" style="display:none;">
+Anda adalah Juri Tata Bahasa Inggris tingkat lanjut untuk keperluan SEO.
+Tugas Anda adalah mengevaluasi array berisi kalimat pencarian yang saya berikan.
+Kelompokkan kalimat tersebut ke dalam 3 kategori di dalam format JSON.
+
+ATURAN PENILAIAN:
+1. Kapitalisasi: Awal kalimat dan nama entitas/merek (seperti Publix, Walmart, Sprouts, DoorDash) WAJIB huruf kapital.
+2. Tanda baca: Tidak boleh ada tanda tanya (?) atau titik (.) di akhir kalimat.
+3. Subject-Verb Agreement: Pastikan kata kerja sesuai subjek (contoh: "Do Sprouts" adalah salah karena Sprouts adalah perusahaan tunggal, seharusnya "Does Sprouts").
+4. Tanda kepemilikan: Singkatan seperti "workers comp" seharusnya "workers' comp".
+
+KATEGORI OUTPUT JSON:
+- "errors": Jika melanggar aturan kapitalisasi merek, atau terdapat kesalahan fatal subject-verb agreement.
+- "warnings": Bahasa kasual yang bisa dimengerti tapi kurang tepat secara formal.
+- "perfect": Kalimat yang sudah 100% sempurna tanpa cela. (Hanya array of string).
+
+KEMBALIKAN HANYA JSON OBJECT VALID BERIKUT (Tanpa teks Markdown apapun):
+{
+  "errors": [ {"original": "...", "correction": "...", "reason": "..."} ],
+  "warnings": [ {"original": "...", "correction": "...", "reason": "..."} ],
+  "perfect": [ "kalimat 1", "kalimat 2" ]
+}
+    </textarea>
+
+    <script>
+        // Global State untuk menggabungkan hasil seluruh batch
+        let globalErrors = [];
+        let globalWarnings = [];
+        let globalPerfect = [];
+
+        const sleep = function(ms) { return new Promise(resolve => setTimeout(resolve, ms)); };
+
+        function logStatus(msg) {
+            const logEl = document.getElementById('statusLog');
+            logEl.innerHTML = '> ' + msg + '<br>' + logEl.innerHTML;
+        }
+
+        async function startBatchProcessing() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const rawText = document.getElementById('dataInput').value.trim();
+            const aiModel = document.getElementById('aiModel').value.trim() || 'glm-5.1';
+            const batchSize = parseInt(document.getElementById('batchSize').value) || 100;
+
+            if (!apiKey || !rawText) {
+                alert("API Key dan Keyword wajib diisi!");
+                return;
+            }
+
+            const lines = rawText.split('\n').map(function(l) { return l.trim(); }).filter(function(l) { return l.length > 0; });
+            if (lines.length === 0) return alert("Data kosong!");
+
+            // Pecah menjadi batch-batch kecil
+            let batches = [];
+            for (let i = 0; i < lines.length; i += batchSize) {
+                batches.push(lines.slice(i, i + batchSize));
+            }
+
+            // Reset UI & State
+            globalErrors = [];
+            globalWarnings = [];
+            globalPerfect = [];
+            document.getElementById('statusLog').innerHTML = '';
+            
+            const btn = document.getElementById('processBtn');
+            btn.disabled = true;
+            btn.className = "w-full bg-gray-400 text-white px-5 py-3 rounded font-bold text-center";
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('resultContainer').classList.remove('hidden');
+
+            logStatus("Memulai pengecekan " + lines.length + " keywords dalam " + batches.length + " batch...");
+
+            const systemPromptText = document.getElementById('aiSystemPrompt').value.trim();
+
+            for (let i = 0; i < batches.length; i++) {
+                let percent = Math.round(((i) / batches.length) * 100);
+                document.getElementById('progressText').innerText = "Memproses Batch " + (i + 1) + " dari " + batches.length;
+                document.getElementById('progressPercent').innerText = percent + "%";
+                document.getElementById('progressBar').style.width = percent + "%";
+                
+                logStatus("Mengirim Batch " + (i + 1) + " ke AI...");
+
+                try {
+                    await processSingleBatch(batches[i], apiKey, aiModel, systemPromptText);
+                    renderResults(); // Update UI secara real-time setiap selesai 1 batch
+                    
+                    if (i < batches.length - 1) {
+                        logStatus("<span class='text-blue-500'>Jeda 2 detik (Mencegah Rate-Limit API)...</span>");
+                        await sleep(2000); 
+                    }
+
+                } catch (error) {
+                    logStatus("<span class='text-red-500'>Error di Batch " + (i + 1) + ": " + error.message + "</span>");
+                    if(!confirm("Terjadi error di Batch " + (i + 1) + ": " + error.message + ".\nLanjut ke batch berikutnya?")) {
+                        break;
+                    }
+                }
+            }
+
+            document.getElementById('progressText').innerText = "Selesai!";
+            document.getElementById('progressPercent').innerText = "100%";
+            document.getElementById('progressBar').style.width = "100%";
+            btn.disabled = false;
+            btn.className = "w-full bg-blue-600 text-white px-5 py-3 rounded hover:bg-blue-700 transition font-bold text-center";
+            btn.innerText = "Mulai Ekstraksi AI (Batch Processing)";
+            logStatus("<span class='text-green-600 font-bold'>Proses seluruh batch tuntas!</span>");
+        }
+
+        async function processSingleBatch(keywordsArray, apiKey, aiModel, promptText) {
+            const response = await fetch('https://ai.sumopod.com/v1/chat/completions', {
+                method: 'POST',
+                headers: { 
+                    'Content-Type': 'application/json', 
+                    'Authorization': 'Bearer ' + apiKey 
+                },
+                body: JSON.stringify({
+                    model: aiModel,
+                    messages: [
+                        { role: "system", content: promptText },
+                        { role: "user", content: JSON.stringify(keywordsArray) }
+                    ],
+                    temperature: 0.1
+                })
+            });
+
+            const jsonResponse = await response.json();
+            
+            if (!response.ok) {
+                let errMsg = "API Error";
+                if (jsonResponse.error && jsonResponse.error.message) errMsg = jsonResponse.error.message;
+                throw new Error(errMsg);
+            }
+
+            let aiText = jsonResponse.choices[0].message.content;
+            
+            // Pembersihan Backtick JSON 100% Aman
+            let bt = String.fromCharCode(96) + String.fromCharCode(96) + String.fromCharCode(96);
+            aiText = aiText.split(bt + "json").join("");
+            aiText = aiText.split(bt + "JSON").join("");
+            aiText = aiText.split(bt).join("");
+            aiText = aiText.trim();
+
+            const result = JSON.parse(aiText);
+
+            // GABUNGKAN HASIL DARI BATCH INI KE GLOBAL STATE
+            if (result.errors) globalErrors = globalErrors.concat(result.errors);
+            if (result.warnings) globalWarnings = globalWarnings.concat(result.warnings);
+            if (result.perfect) globalPerfect = globalPerfect.concat(result.perfect);
+        }
+
+        function buatKolom(teks, classList) {
+            let td = document.createElement('td');
+            td.className = classList;
+            td.innerText = teks || '-';
+            return td;
+        }
+
+        function renderResults() {
+            // Update Errors
+            document.getElementById('countError').innerText = String(globalErrors.length);
+            const tbodyErrors = document.getElementById('tableErrors');
+            tbodyErrors.innerHTML = '';
+            for (let i = 0; i < globalErrors.length; i++) {
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-red-50';
+                tr.appendChild(buatKolom(globalErrors[i].original, 'p-2 text-red-900 line-through'));
+                tr.appendChild(buatKolom(globalErrors[i].correction, 'p-2 font-bold text-green-700'));
+                tr.appendChild(buatKolom(globalErrors[i].reason, 'p-2 text-gray-600 text-xs'));
+                tbodyErrors.appendChild(tr);
+            }
+
+            // Update Warnings
+            document.getElementById('countWarning').innerText = String(globalWarnings.length);
+            const tbodyWarnings = document.getElementById('tableWarnings');
+            tbodyWarnings.innerHTML = '';
+            for (let j = 0; j < globalWarnings.length; j++) {
+                let tr = document.createElement('tr');
+                tr.className = 'hover:bg-yellow-50';
+                tr.appendChild(buatKolom(globalWarnings[j].original, 'p-2 text-yellow-900'));
+                tr.appendChild(buatKolom(globalWarnings[j].correction, 'p-2 font-bold text-green-700'));
+                tr.appendChild(buatKolom(globalWarnings[j].reason, 'p-2 text-gray-600 text-xs'));
+                tbodyWarnings.appendChild(tr);
+            }
+
+            // Update Perfect
+            document.getElementById('countPerfect').innerText = String(globalPerfect.length);
+            const ulPerfect = document.getElementById('listPerfect');
+            ulPerfect.innerHTML = '';
+            for (let k = 0; k < globalPerfect.length; k++) {
+                let li = document.createElement('li');
+                li.innerText = globalPerfect[k];
+                ulPerfect.appendChild(li);
+            }
+        }
+
+        // --- FUNGSI COPY ERRORS (Format Tabel/TSV) ---
+        function copyErrors() {
+            if (globalErrors.length === 0) return;
+            let tsv = "Asli\tKoreksi\tAlasan\n";
+            for (let i = 0; i < globalErrors.length; i++) {
+                tsv += globalErrors[i].original + "\t" + globalErrors[i].correction + "\t" + globalErrors[i].reason + "\n";
+            }
+            navigator.clipboard.writeText(tsv).then(function() {
+                const btn = document.getElementById('copyErrorsBtn');
+                btn.innerText = "Disalin!";
+                btn.className = "text-xs bg-gray-600 text-white px-3 py-1 rounded";
+                setTimeout(function() {
+                    btn.innerText = "Copy Table";
+                    btn.className = "text-xs bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700";
+                }, 2000);
+            });
+        }
+
+        // --- FUNGSI COPY WARNINGS (Format Tabel/TSV) ---
+        function copyWarnings() {
+            if (globalWarnings.length === 0) return;
+            let tsv = "Asli\tKoreksi\tAlasan\n";
+            for (let i = 0; i < globalWarnings.length; i++) {
+                tsv += globalWarnings[i].original + "\t" + globalWarnings[i].correction + "\t" + globalWarnings[i].reason + "\n";
+            }
+            navigator.clipboard.writeText(tsv).then(function() {
+                const btn = document.getElementById('copyWarningsBtn');
+                btn.innerText = "Disalin!";
+                btn.className = "text-xs bg-gray-600 text-white px-3 py-1 rounded";
+                setTimeout(function() {
+                    btn.innerText = "Copy Table";
+                    btn.className = "text-xs bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600";
+                }, 2000);
+            });
+        }
+
+        // --- FUNGSI COPY PERFECT ---
+        function copyPerfect() {
+            if (globalPerfect.length === 0) return;
+            navigator.clipboard.writeText(globalPerfect.join('\n')).then(function() {
+                const btn = document.getElementById('copyPerfectBtn');
+                btn.innerText = "Disalin!";
+                btn.className = "text-xs bg-gray-600 text-white px-3 py-1 rounded";
+                setTimeout(function() {
+                    btn.innerText = "Copy List";
+                    btn.className = "text-xs bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700";
+                }, 2000);
+            });
+        }
+    </script>
+</body>
+</html>
